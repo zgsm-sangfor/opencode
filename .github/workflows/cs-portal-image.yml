@@ -1,0 +1,92 @@
+# Build and push the CoStrict Web portal image (packages/app-ai-native).
+#
+# Ported from costrict-web's build-images.yaml, where the portal image was built
+# from this repository's submodule. The build flow, build args and image address
+# (`ghcr.io/<owner>/costrict-web-portal`) are kept identical.
+
+name: publish-portal-image
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Image tag, e.g. v0.0.3 (a leading 'v' is stripped)"
+        required: true
+        default: "v0.0.1"
+        type: string
+      push:
+        description: "Push image to registry"
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: portal-image-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  # Must match the repository owner. GITHUB_TOKEN cannot push to another GHCR namespace.
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+  IMAGE_NAME: costrict-web-portal
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        if: inputs.push
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve version
+        id: version
+        env:
+          INPUT: ${{ inputs.version }}
+        run: |
+          VERSION="${INPUT#v}"
+          [ -z "$VERSION" ] && VERSION="latest"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./packages/app-ai-native/Dockerfile
+          push: ${{ inputs.push }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          build-args: |
+            VITE_API_PREFIX=/costrict-web-api
+          cache-from: type=gha,scope=portal
+          cache-to: type=gha,mode=max,scope=portal
+          platforms: linux/amd64,linux/arm64
+
+      - name: Image digest
+        run: |
+          {
+            echo "### Portal Image Built"
+            echo ""
+            echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}\`"
+            echo ""
+            echo "**Digest:** \`${{ steps.build.outputs.digest }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
