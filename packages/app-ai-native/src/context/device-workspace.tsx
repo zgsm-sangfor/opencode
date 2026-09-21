@@ -826,11 +826,13 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
                 case "session.created": {
                   const info = (payload.properties as { info?: Session })?.info ?? payload.properties as Session
                   if (!info?.id) break
+                  // upstream may omit `time`; keep the store well-formed so sort/group reads never see undefined
+                  const session = info.time ? info : { ...info, time: { created: Date.now(), updated: Date.now() } }
                   setStore("session", produce((draft) => {
-                    const idx = draft.findIndex((s) => s.id === info.id)
-                    if (idx !== -1) draft[idx] = info
+                    const idx = draft.findIndex((s) => s.id === session.id)
+                    if (idx !== -1) draft[idx] = session
                     else {
-                      draft.push(info)
+                      draft.push(session)
                       draft.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
                     }
                   }))

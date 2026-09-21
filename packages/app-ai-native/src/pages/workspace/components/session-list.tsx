@@ -24,11 +24,11 @@ function hasPendingInteraction(
   return treeIds.some((id) => (questions[id]?.length ?? 0) > 0 || (permissions[id]?.length ?? 0) > 0)
 }
 
-export function sessionGroup(session: { time: { updated?: number; created: number } }) {
+export function sessionGroup(session: { time?: { updated?: number; created?: number } }) {
   const now = Date.now()
   const startOfDay = new Date(now).setHours(0, 0, 0, 0)
   const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000
-  const t = session.time.updated ?? session.time.created
+  const t = session.time?.updated ?? session.time?.created ?? 0
   return t >= startOfDay ? "today" : t >= sevenDaysAgo ? "thisWeek" : "older"
 }
 
@@ -65,7 +65,7 @@ export function SessionListPanel() {
     return sessions
       .filter((s) => !s.parentID)
       .slice()
-      .sort((a, b) => (b.time.updated ?? b.time.created) - (a.time.updated ?? a.time.created))
+      .sort((a, b) => (b.time?.updated ?? b.time?.created ?? 0) - (a.time?.updated ?? a.time?.created ?? 0))
   })
 
   type SessionGroup = { key: string; label: string; sessions: Session[] }
