@@ -349,13 +349,13 @@ export function getToolInfo(tool: string, input: any = {}): ToolInfo {
       return {
         icon: "console",
         title: i18n.t("ui.tool.bash"),
-        subtitle: input.description,
+        subtitle: input.description || input.command,
       }
     case "shell":
       return {
         icon: "console",
         title: i18n.t("ui.tool.shell"),
-        subtitle: input.description,
+        subtitle: input.description || input.command,
       }
     case "edit":
       return {
@@ -1998,6 +1998,7 @@ ToolRegistry.register({
     const sawPending = pending()
     const filtered = createMemo(() => getFilteredMeta(props.metadata))
     const cmd = () => props.input.command ?? props.metadata.command ?? ""
+    const subtitle = createMemo(() => props.input.description || cmd())
     const text = createMemo(() => {
       const c = cmd()
       const out = stripAnsi(props.output || props.metadata.output || "")
@@ -2023,8 +2024,8 @@ ToolRegistry.register({
               <span data-slot="basic-tool-tool-title">
                 <TextShimmer text={i18n.t("ui.tool.bash")} active={pending()} />
               </span>
-              <Show when={props.input.description}>
-                <ShellSubmessage text={props.input.description} animate={sawPending} />
+              <Show when={subtitle()}>
+                <ShellSubmessage text={subtitle()} animate={sawPending} />
               </Show>
             </div>
           </div>

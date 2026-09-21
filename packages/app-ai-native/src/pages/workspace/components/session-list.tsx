@@ -8,6 +8,7 @@ import { useContentTabs } from "@/context/content-tabs"
 import { useSessionChat } from "@/context/session-chat"
 import { sessionTreeIDs } from "@/pages/session/composer/session-request-tree"
 import { SessionActionMenuItems } from "./session-action-menu"
+import { HoverScrollText } from "./hover-scroll-text"
 import type { Session } from "@opencode-ai/sdk/v2/client"
 
 const SESSION_TAB_ICON = "bubble-5"
@@ -57,6 +58,7 @@ export function SessionListPanel() {
   const tabStore = useContentTabs()
   const chat = useSessionChat()
   const [groups, setGroups] = createSignal<Record<string, boolean>>({ older: true })
+  const now = Date.now()
 
   const sortedSessions = createMemo(() => {
     const sessions = dw.data.session
@@ -86,6 +88,23 @@ export function SessionListPanel() {
   const isWorking = (id: string) => {
     const s = dw.data.sessionStatus[id]
     return s?.type === "busy" || s?.type === "retry" || s?.type === "compacting"
+  }
+
+  const timeLabel = (timestamp: number) => {
+    if (!timestamp) return ""
+    const diff = now - timestamp
+    const minutes = Math.floor(diff / 60_000)
+    if (minutes < 1) return language.t("workspace.session.time.justNow")
+    if (minutes < 60) return language.t("workspace.session.time.minutes", { count: minutes })
+    const hours = Math.floor(diff / 3_600_000)
+    if (hours < 24) return language.t("workspace.session.time.hours", { count: hours })
+    const days = Math.floor(diff / 86_400_000)
+    if (days < 7) return language.t("workspace.session.time.days", { count: days })
+    return new Intl.DateTimeFormat(language.locale() === "zh" ? "zh-CN" : "en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }).format(new Date(timestamp))
   }
 
   const openSession = (session: Session) => {
@@ -154,6 +173,7 @@ export function SessionListPanel() {
                               })
                               return (
                                 <div
+                                  data-session-row=""
                                   class="group/s flex items-center gap-1.5 h-9 px-1.5 text-12-regular rounded-md cursor-pointer transition-colors duration-150"
                                   classList={{
                                     "bg-native-primary-soft text-native-foreground": isActive(),
@@ -175,7 +195,13 @@ export function SessionListPanel() {
                                   <Show when={!hasPendingInteraction(dw.data.session, dw.data.questions, dw.data.permissions, session.id) && !isWorking(session.id) && !!dw.data.unread[session.id]}>
                                     <span class="shrink-0 w-2 h-2 rounded-full bg-native-primary" />
                                   </Show>
-                                  <span class="truncate flex-1 min-w-0">{session.title || language.t("command.session.new")}</span>
+                                  <HoverScrollText text={session.title || language.t("command.session.new")} />
+                                  <span
+                                    aria-hidden="true"
+                                    class="shrink-0 max-w-28 overflow-hidden whitespace-nowrap text-[11px] leading-none tabular-nums text-native-muted transition-[max-width,opacity] duration-150 group-hover/s:max-w-0 group-hover/s:opacity-0"
+                                  >
+                                    {timeLabel(session.time.updated ?? session.time.created)}
+                                  </span>
                                   <div
                                     onClick={(e) => e.stopPropagation()}
                                     onPointerDown={(e) => e.stopPropagation()}

@@ -1,4 +1,5 @@
 import { createSignal, createMemo, For, Show } from "solid-js"
+import { createStore } from "solid-js/store"
 import { useNavigate, useParams } from "@solidjs/router"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -15,6 +16,7 @@ import { useWorkspaceNavigate } from "@/hooks/use-workspace-navigate"
 import { useActiveWorkspace } from "../active-workspace"
 import { useLanguage } from "@/context/language"
 import { WorkspaceCard } from "./workspace-card"
+import { Persist, persisted } from "@/utils/persist"
 
 export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
   const language = useLanguage()
@@ -42,6 +44,20 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
   const params = useParams()
   const navigate = useNavigate()
   const { navigateToNewSession } = useWorkspaceNavigate()
+  const [pinStore, setPinStore] = persisted(
+    Persist.global("workspace.pins"),
+    createStore<{ ids: string[] }>({ ids: [] }),
+  )
+  const pinSet = createMemo(() => new Set(pinStore.ids))
+  const collator = createMemo(() => new Intl.Collator(language.locale(), { numeric: true, sensitivity: "base" }))
+  const ordered = createMemo(() =>
+    [...workspaces()].sort((a, b) => {
+      const rank = (pinSet().has(b.id) ? 1 : 0) - (pinSet().has(a.id) ? 1 : 0)
+      return rank || collator().compare(a.name, b.name)
+    }),
+  )
+  const togglePin = (id: string) =>
+    setPinStore("ids", (ids) => (ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]))
 
   const isEnabled = (workspace: Workspace) => enabledWorkspaceIds().includes(workspace.id)
 
@@ -58,12 +74,12 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
   }
 
   const runningIds = createMemo(() =>
-    workspaces()
+    ordered()
       .filter((w) => isEnabled(w))
       .map((w) => w.id),
   )
   const idleIds = createMemo(() =>
-    workspaces()
+    ordered()
       .filter((w) => !isEnabled(w))
       .map((w) => w.id),
   )
@@ -257,7 +273,18 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
               }
             >
               <div class="flex flex-col gap-1">
-                <For each={runningIds()}>{(id) => <WorkspaceCard id={id} isRunning={true} onOpen={handleOpenWorkspace} onClose={handleCloseWorkspace} />}</For>
+                <For each={runningIds()}>
+                  {(id) => (
+                    <WorkspaceCard
+                      id={id}
+                      isRunning={true}
+                      pinned={pinSet().has(id)}
+                      onTogglePin={() => togglePin(id)}
+                      onOpen={handleOpenWorkspace}
+                      onClose={handleCloseWorkspace}
+                    />
+                  )}
+                </For>
               </div>
             </Show>
           </div>
@@ -269,7 +296,18 @@ export function WorkspaceSidebar(props: { hide?: () => void } = {}) {
             <span class="ml-auto rounded-[var(--native-radius-full)] bg-[color:color-mix(in_oklab,var(--native-panel)_82%,var(--native-bg-subtle))] px-2 py-0.5 text-[11px] font-medium text-sidebar-foreground/55">{idleIds().length}</span>
           </div>
           <div class="flex flex-col gap-1.5">
-            <For each={idleIds()}>{(id) => <WorkspaceCard id={id} isRunning={false} onOpen={handleOpenWorkspace} onClose={handleCloseWorkspace} />}</For>
+            <For each={idleIds()}>
+              {(id) => (
+                <WorkspaceCard
+                  id={id}
+                  isRunning={false}
+                  pinned={pinSet().has(id)}
+                  onTogglePin={() => togglePin(id)}
+                  onOpen={handleOpenWorkspace}
+                  onClose={handleCloseWorkspace}
+                />
+              )}
+            </For>
             <Show when={workspaces().length === 0}>
               <div class="flex flex-col items-center justify-center rounded-[var(--native-radius-lg)] border border-[color:color-mix(in_oklab,var(--native-border)_24%,transparent)] bg-[color:color-mix(in_oklab,var(--native-surface)_72%,var(--native-panel))] py-8 text-sidebar-foreground/50">
                 <Icon name="folder" class="mb-2 size-8 opacity-30" />
