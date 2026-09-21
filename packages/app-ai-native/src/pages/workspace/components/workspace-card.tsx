@@ -28,6 +28,8 @@ export function getDeviceStatusDot(status: DeviceStatus | undefined, t: (key: st
 export interface WorkspaceCardProps {
   id: string
   isRunning: boolean
+  pinned?: boolean
+  onTogglePin?: () => void
   onOpen: (workspace: Workspace) => void
   onClose: (workspace: Workspace) => void
 }
@@ -111,6 +113,17 @@ export function WorkspaceCard(props: WorkspaceCardProps) {
       />
       <DropdownMenu.Portal>
         <DropdownMenu.Content class="min-w-36 bg-sidebar shadow-md">
+          <Show when={props.onTogglePin}>
+            <DropdownMenu.Item class="hover:bg-sidebar-accent" onSelect={() => props.onTogglePin?.()}>
+              <Icon
+                name="pin"
+                size="small"
+                class="size-4"
+                classList={{ "text-[var(--native-primary)]": props.pinned, "text-sidebar-foreground/70": !props.pinned }}
+              />
+              <DropdownMenu.ItemLabel>{props.pinned ? t("workspace.unpin") : t("workspace.pin")}</DropdownMenu.ItemLabel>
+            </DropdownMenu.Item>
+          </Show>
           <Show when={props.isRunning}>
             <DropdownMenu.Item class="hover:bg-sidebar-accent" onSelect={() => props.onClose(workspace()!)}>
               <Icon name="stop" size="small" class="size-4 text-sidebar-foreground/70" />
@@ -179,6 +192,11 @@ export function WorkspaceCard(props: WorkspaceCardProps) {
                       "bg-sidebar-border": !dot().online && !dot().offline,
                     }}
                   />
+                  <Show when={props.pinned}>
+                    <span class="flex size-4 shrink-0 items-center justify-center text-[var(--native-primary)]" title={t("workspace.pinned")}>
+                      <Icon name="pin" size="small" class="size-3.5" />
+                    </span>
+                  </Show>
                   <Show
                     when={renaming()}
                     fallback={
@@ -225,6 +243,11 @@ export function WorkspaceCard(props: WorkspaceCardProps) {
                     "bg-sidebar-border": !dot().online && !dot().offline,
                   }}
                 />
+                <Show when={props.pinned}>
+                  <span class="flex size-4 shrink-0 items-center justify-center text-[var(--native-primary)]" title={t("workspace.pinned")}>
+                    <Icon name="pin" size="small" class="size-3.5" />
+                  </span>
+                </Show>
                 <Show
                   when={renaming()}
                   fallback={
