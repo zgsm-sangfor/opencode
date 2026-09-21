@@ -226,7 +226,6 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
         }
 
         const msgs = [...fetched.values()].map((d) => d.info)
-        msgs.sort((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))
         setStore("messages", sessionID, msgs)
 
         for (const [mid, data] of fetched) {
