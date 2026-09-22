@@ -138,7 +138,8 @@ const FileTreeNode = (
   const file = useFile()
   const key = () => file.normalize(local.node.path).replaceAll("\\", "/")
   const kind = () => visibleKind(key(), local.kinds, local.marks)
-  const active = () => !!kind() && !local.node.ignored
+  const active = () => !!kind()
+  const muted = () => local.node.ignored
   const color = () => {
     const value = kind()
     if (!value) return
@@ -151,6 +152,7 @@ const FileTreeNode = (
       classList={{
         "group/filetree w-full min-w-0 h-6 flex items-center justify-start gap-x-1.5 rounded-md px-1.5 py-0 text-left hover:bg-surface-raised-base-hover active:bg-surface-base-active transition-colors cursor-pointer": true,
         "bg-surface-base-active": local.node.path === local.active,
+        "opacity-50": muted(),
         ...(local.classList ?? {}),
         [local.class ?? ""]: !!local.class,
         [local.nodeClass ?? ""]: !!local.nodeClass,
@@ -182,7 +184,7 @@ const FileTreeNode = (
         if (!value) return null
         if (local.node.type === "file") {
           return (
-            <span class="shrink-0 w-4 text-center text-12-medium" style={kindTextColor(value)}>
+            <span class="shrink-0 w-4 text-center text-12-medium" style={color()}>
               {kindLabel(value)}
             </span>
           )
@@ -393,7 +395,7 @@ export default function FileTree(props: {
           const expanded = () => file.tree.state(node.path)?.expanded ?? false
           const deep = () => deeps().get(node.path) ?? -1
           const kind = () => visibleKind(file.normalize(node.path).replaceAll("\\", "/"), kinds(), marks())
-          const active = () => !!kind() && !node.ignored
+          const active = () => !!kind()
 
           return (
             <Switch>
@@ -468,19 +470,19 @@ export default function FileTree(props: {
                 >
                   <div class="w-4 shrink-0" />
                   <Switch>
-                    <Match when={node.ignored}>
-                      <FileIcon
-                        node={node}
-                        class="size-4 filetree-icon filetree-icon--mono"
-                        style="color: var(--icon-weak-base)"
-                        mono
-                      />
-                    </Match>
                     <Match when={active()}>
                       <FileIcon
                         node={node}
                         class="size-4 filetree-icon filetree-icon--mono"
                         style={kindTextColor(kind()!)}
+                        mono
+                      />
+                    </Match>
+                    <Match when={node.ignored}>
+                      <FileIcon
+                        node={node}
+                        class="size-4 filetree-icon filetree-icon--mono"
+                        style="color: var(--icon-weak-base)"
                         mono
                       />
                     </Match>

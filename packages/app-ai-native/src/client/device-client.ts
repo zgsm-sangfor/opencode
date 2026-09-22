@@ -196,7 +196,7 @@ export function createDeviceClient(opts: ClientOpts): DeviceClient {
       config: () => http.get<RuntimeConfig>("/api/v1/runtime/config"),
       path: () => http.get("/api/v1/runtime/path"),
       vcs: () => http.get("/api/v1/runtime/vcs"),
-      fileList: (path: string) => http.get<{ path?: string; entries?: Array<{ name: string; type: string }> }>("/api/v1/runtime/files", { path }).then((res) => {
+      fileList: (path: string) => http.get<{ path?: string; entries?: Array<{ name: string; type: string; ignored?: boolean }> }>("/api/v1/runtime/files", { path }).then((res) => {
         const entries = res?.entries ?? []
         const basePath = res?.path ?? path
         return entries.map((e) => ({
@@ -204,17 +204,17 @@ export function createDeviceClient(opts: ClientOpts): DeviceClient {
           path: basePath === "/" ? `/${e.name}` : `${basePath}/${e.name}`,
           absolute: basePath === "/" ? `/${e.name}` : `${basePath}/${e.name}`,
           type: e.type === "directory" ? "directory" as const : "file" as const,
-          ignored: false,
+          ignored: e.ignored ?? false,
         }))
       }),
-      roots: () => http.get<{ entries?: Array<{ name: string; type: string }> }>("/api/v1/runtime/files", { roots: "true" }).then((res) => {
+      roots: () => http.get<{ entries?: Array<{ name: string; type: string; ignored?: boolean }> }>("/api/v1/runtime/files", { roots: "true" }).then((res) => {
         const entries = res?.entries ?? []
         return entries.map((e) => ({
           name: e.name,
           path: e.name,
           absolute: e.name,
           type: e.type === "directory" ? "directory" as const : "file" as const,
-          ignored: false,
+          ignored: e.ignored ?? false,
         }))
       }),
       fileMeta: (path: string) => http.get<FileMetaData>("/api/v1/runtime/files/meta", { path }),

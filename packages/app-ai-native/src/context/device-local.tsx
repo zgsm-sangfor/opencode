@@ -70,19 +70,19 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
   const device = useDeviceSDK()
   const sync = useDeviceWorkspace()
 
-  const sessionModelsKey = () => `opencode.device.sessionModels.${props.workspaceId ?? base64Encode(device.directory)}`
+  const modelKey = () => `opencode.device.model.${props.workspaceId ?? base64Encode(device.directory)}`
 
-  const sessionModels = (() => {
+  const loadModel = () => {
     try {
-      const raw = localStorage.getItem(sessionModelsKey())
-      if (raw) return JSON.parse(raw) as Record<string, ModelKey>
+      const raw = localStorage.getItem(modelKey())
+      if (raw) return JSON.parse(raw) as ModelKey
     } catch {}
-    return {} as Record<string, ModelKey>
-  })()
+  }
 
-  function saveSessionModels() {
+  function saveModel(model: ModelKey | undefined) {
     try {
-      localStorage.setItem(sessionModelsKey(), JSON.stringify(sessionModels))
+      if (model) localStorage.setItem(modelKey(), JSON.stringify(model))
+      else localStorage.removeItem(modelKey())
     } catch {}
   }
 
@@ -102,6 +102,8 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
     } catch {}
   }
 
+  const cached = loadModel()
+
   const [activeSessionID, setActiveSessionID] = createSignal<string | undefined>()
   let _onSessionCreated: ((input: { sessionID: string; title?: string }) => void) | undefined
   let _navigateBack: (() => void) | undefined
@@ -115,37 +117,20 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
     currentModel: ModelKey | undefined
   }>({
     currentAgent: undefined,
-    currentModel: undefined,
+    currentModel: cached ? { ...cached } : undefined,
   })
 
   const setActiveSession = (sessionID: string | undefined) => {
     const prev = activeSessionID()
     if (prev === sessionID) return
     setActiveSessionID(sessionID)
-    if (sessionID) {
-      const cachedModel = sessionModels[sessionID]
-      if (cachedModel && cachedModel.providerID) {
-        setStore("currentModel", { ...cachedModel })
-      } else if (!prev && store.currentModel) {
-        // Carrying the user's selection from the new-session composer into the
-        // freshly created session: there was no sid to persist against before,
-        // so commit it now instead of dropping it.
-        sessionModels[sessionID] = store.currentModel
-        saveSessionModels()
-      } else {
-        setStore("currentModel", undefined)
-      }
-      const cachedAgent = sessionAgents[sessionID]
-      if (cachedAgent) {
-        setStore("currentAgent", cachedAgent)
-      } else if (!prev && store.currentAgent) {
-        sessionAgents[sessionID] = store.currentAgent
-        saveSessionAgents()
-      } else {
-        setStore("currentAgent", undefined)
-      }
+    const cachedAgent = sessionID ? sessionAgents[sessionID] : undefined
+    if (cachedAgent) {
+      setStore("currentAgent", cachedAgent)
+    } else if (!prev && sessionID && store.currentAgent) {
+      sessionAgents[sessionID] = store.currentAgent
+      saveSessionAgents()
     } else {
-      setStore("currentModel", undefined)
       setStore("currentAgent", undefined)
     }
   }
@@ -236,16 +221,9 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
   })
 
   const setModel = (model: ModelKey | undefined) => {
-    setStore("currentModel", model)
-    const sid = activeSessionID()
-    if (sid) {
-      if (model && model.providerID) {
-        sessionModels[sid] = model
-      } else {
-        delete sessionModels[sid]
-      }
-      saveSessionModels()
-    }
+    const next = model && model.providerID ? { ...model } : undefined
+    setStore("currentModel", next)
+    saveModel(next)
   }
 
   const value: DeviceLocalValue = {
