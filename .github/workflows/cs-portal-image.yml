@@ -14,6 +14,11 @@ on:
         required: true
         default: "v0.0.1"
         type: string
+      base_path:
+        description: "Portal base path, e.g. /costrict-web-portal (empty for root)"
+        required: false
+        default: "/cloud"
+        type: string
       push:
         description: "Push image to registry"
         required: false
@@ -77,6 +82,7 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           build-args: |
             VITE_API_PREFIX=/costrict-web-api
+            VITE_BASE_PATH=${{ inputs.base_path }}
           cache-from: type=gha,scope=portal
           cache-to: type=gha,mode=max,scope=portal
           platforms: linux/amd64,linux/arm64

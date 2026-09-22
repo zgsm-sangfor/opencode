@@ -26,18 +26,6 @@ if [ -f "/app/packages/app-ai-native/dist/index.html" ]; then
   content=$(envsubst "$ENV_VARS" < /app/packages/app-ai-native/dist/index.html)
   printf '%s\n' "$content" > /app/packages/app-ai-native/dist/index.html
   echo "Runtime environment variables injected into index.html"
-
-  # Rewrite asset paths in index.html to include base path prefix
-  # This allows deploying under a sub-path without rebuilding the image
-  BASE_PATH=$(echo "$VITE_BASE_PATH" | sed 's:/*$::')
-  if [ -n "$BASE_PATH" ]; then
-    # 1) Rewrite absolute paths: src="/..." and href="/..."
-    sed -i "s|src=\"/|src=\"${BASE_PATH}/|g" /app/packages/app-ai-native/dist/index.html
-    sed -i "s|href=\"/|href=\"${BASE_PATH}/|g" /app/packages/app-ai-native/dist/index.html
-    # 2) Inject <base> tag for relative URL resolution (e.g. "assets/index.js")
-    sed -i "s|<head>|<head>\n    <base href=\"${BASE_PATH}/\">|" /app/packages/app-ai-native/dist/index.html
-    echo "Asset paths rewritten with base path: ${BASE_PATH}"
-  fi
 fi
 
 # Execute the CMD
