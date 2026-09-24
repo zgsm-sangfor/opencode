@@ -824,6 +824,31 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
               </Show>
             </Show>
             <Show when={active() === "diffs"}>
+              <Show when={!diff.state().disabled && diff.state().branch}>
+                <div class="px-1.5 pt-0.5 pb-1 text-11-regular text-text-weak flex items-center gap-1.5">
+                  <Icon name="branch" size="small" class="shrink-0" />
+                  <span
+                    class={`truncate ${
+                      dw.data.vcs?.dirty === undefined
+                        ? "text-text-weak"
+                        : dw.data.vcs?.dirty
+                        ? "text-git-dirty"
+                        : "text-git-clean"
+                    }`}
+                  >
+                    {diff.state().branch}
+                    <Show when={(dw.data.vcs?.aheadCount ?? 0) > 0}>
+                      {" "}↑{dw.data.vcs?.aheadCount}
+                    </Show>
+                    <Show when={(dw.data.vcs?.behindCount ?? 0) > 0}>
+                      {" "}↓{dw.data.vcs?.behindCount}
+                    </Show>
+                  </span>
+                  <Show when={dw.data.vcs?.lastCommitHash}>
+                    <span class="ml-auto text-text-weak/60 shrink-0">{dw.data.vcs?.lastCommitHash}</span>
+                  </Show>
+                </div>
+              </Show>
               <Show when={diff.state().disabled} fallback={
                 <Show when={diff.state().stagedFiles.length > 0 || diff.state().unstagedFiles.length > 0 || diff.state().untrackedFiles.length > 0 || diff.state().loading} fallback={
                   <div class="px-3 py-2 text-12-regular text-text-weak">
@@ -831,31 +856,6 @@ function ContentSidebar(props: { directory: string; autoExpandGroup?: () => { gr
                   </div>
                 }>
                   <div class="px-0 py-0.5">
-                    <Show when={diff.state().branch}>
-                      <div class="px-1.5 pb-1 text-11-regular text-text-weak flex items-center gap-1.5">
-                        <Icon name="branch" size="small" class="shrink-0" />
-                      <span
-                        class={`truncate ${
-                          dw.data.vcs?.dirty === undefined
-                            ? "text-text-weak"
-                            : dw.data.vcs?.dirty
-                            ? "text-git-dirty"
-                            : "text-git-clean"
-                        }`}
-                      >
-                        {diff.state().branch}
-                        <Show when={(dw.data.vcs?.aheadCount ?? 0) > 0}>
-                          {" "}↑{dw.data.vcs?.aheadCount}
-                        </Show>
-                        <Show when={(dw.data.vcs?.behindCount ?? 0) > 0}>
-                          {" "}↓{dw.data.vcs?.behindCount}
-                        </Show>
-                      </span>
-                      <Show when={dw.data.vcs?.lastCommitHash}>
-                        <span class="ml-auto text-text-weak/60 shrink-0">{dw.data.vcs?.lastCommitHash}</span>
-                      </Show>
-                    </div>
-                  </Show>
                   <Show when={diff.state().stagedFiles.length > 0}>
                     <div
                       class="px-1.5 pt-1.5 pb-0.5 flex items-center gap-1 text-[11px] font-[600] text-native-muted tracking-wide uppercase cursor-pointer hover:text-native-foreground transition-colors"
