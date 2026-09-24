@@ -5,6 +5,7 @@ import { useDeviceSDK } from "./device-sdk"
 import { useDeviceWorkspace } from "./device-workspace"
 import { base64Encode } from "@opencode-ai/util/encode"
 import type { ProviderCapability, ProviderCapabilityModel } from "./global-sync/types"
+import { cycleModelVariant, getConfiguredAgentVariant, resolveModelVariant } from "./model-variant"
 
 type ModelKey = { providerID: string; modelID: string }
 
@@ -46,11 +47,11 @@ type DeviceLocalValue = {
     visible: (model: ModelKey) => boolean
     setVisibility: (model: ModelKey, visible: boolean) => void
     variant: {
-      configured: () => undefined
-      selected: () => undefined
-      current: () => undefined
-      list: () => never[]
-      set: (_value: string | undefined) => void
+      configured: () => string | undefined
+      selected: () => string | null | undefined
+      current: () => string | undefined
+      list: () => string[]
+      set: (value: string | undefined) => void
       cycle: () => void
     }
   }
@@ -71,6 +72,8 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
   const sync = useDeviceWorkspace()
 
   const modelKey = () => `opencode.device.model.${props.workspaceId ?? base64Encode(device.directory)}`
+  const variantKey = () =>
+    `opencode.device.modelVariants.${props.workspaceId ?? base64Encode(device.directory)}`
 
   const loadModel = () => {
     try {
@@ -84,6 +87,14 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
       if (model) localStorage.setItem(modelKey(), JSON.stringify(model))
       else localStorage.removeItem(modelKey())
     } catch {}
+  }
+
+  const loadVariants = () => {
+    try {
+      const raw = localStorage.getItem(variantKey())
+      if (raw) return JSON.parse(raw) as Record<string, string | null>
+    } catch {}
+    return {} as Record<string, string | null>
   }
 
   const sessionAgentsKey = () => `opencode.device.sessionAgents.${props.workspaceId ?? base64Encode(device.directory)}`
@@ -103,6 +114,7 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
   }
 
   const cached = loadModel()
+  const cachedVariants = loadVariants()
 
   const [activeSessionID, setActiveSessionID] = createSignal<string | undefined>()
   let _onSessionCreated: ((input: { sessionID: string; title?: string }) => void) | undefined
@@ -115,10 +127,18 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
   const [store, setStore] = createStore<{
     currentAgent: string | undefined
     currentModel: ModelKey | undefined
+    variants: Record<string, string | null>
   }>({
     currentAgent: undefined,
     currentModel: cached ? { ...cached } : undefined,
+    variants: cachedVariants,
   })
+
+  function saveVariants() {
+    try {
+      localStorage.setItem(variantKey(), JSON.stringify(store.variants))
+    } catch {}
+  }
 
   const setActiveSession = (sessionID: string | undefined) => {
     const prev = activeSessionID()
@@ -226,6 +246,35 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
     saveModel(next)
   }
 
+  const modelSlot = (model: ModelInfo) => `${model.provider.id}/${model.id}`
+  const variantList = () => Object.keys(currentModel()?.variants ?? {})
+  const variantSelected = () => {
+    const model = currentModel()
+    if (!model) return undefined
+    return store.variants[modelSlot(model)]
+  }
+  const variantConfigured = () => {
+    const agent = currentAgent()
+    const model = currentModel()
+    if (!agent || !model) return undefined
+    return getConfiguredAgentVariant({
+      agent: { model: agent.model, variant: agent.variant },
+      model: { providerID: model.provider.id, modelID: model.id, variants: model.variants },
+    })
+  }
+  const variantCurrent = () =>
+    resolveModelVariant({
+      variants: variantList(),
+      selected: variantSelected(),
+      configured: variantConfigured(),
+    })
+  const variantSet = (value: string | undefined) => {
+    const model = currentModel()
+    if (!model) return
+    setStore("variants", modelSlot(model), value ?? null)
+    saveVariants()
+  }
+
   const value: DeviceLocalValue = {
     slug: () => base64Encode(device.directory),
     activeSessionID,
@@ -250,12 +299,22 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
       visible: () => true,
       setVisibility: () => {},
       variant: {
-        configured: () => undefined,
-        selected: () => undefined,
-        current: () => undefined,
-        list: () => [],
-        set: () => {},
-        cycle: () => {},
+        configured: variantConfigured,
+        selected: variantSelected,
+        current: variantCurrent,
+        list: variantList,
+        set: variantSet,
+        cycle() {
+          const items = variantList()
+          if (items.length === 0) return
+          variantSet(
+            cycleModelVariant({
+              variants: items,
+              selected: variantSelected(),
+              configured: variantConfigured(),
+            }),
+          )
+        },
       },
     },
   }

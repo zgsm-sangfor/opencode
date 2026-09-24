@@ -6,8 +6,7 @@ export default defineConfig(({ mode }) => {
 
   const cloudHost = env.VITE_CLOUD_SERVER_HOST ?? "localhost"
   const cloudPort = env.VITE_CLOUD_SERVER_PORT ?? "8080"
-  const cloudTarget = `http://${cloudHost}:${cloudPort}`
-  // const cloudTarget = `http://${cloudHost}`
+  const cloudTarget = cloudHost.startsWith("http") ? cloudHost : `http://${cloudHost}:${cloudPort}`
   const appPort = parseInt(env.VITE_APP_PORT ?? "3000")
   const prefix = env.VITE_API_PREFIX ?? ""
   const quotaPrefix = env.VITE_QUOTA_PREFIX ?? ""
@@ -36,6 +35,10 @@ export default defineConfig(({ mode }) => {
       host: "0.0.0.0",
       allowedHosts: true,
       port: appPort,
+      cors: {
+        origin: [`http://localhost:${appPort}`, `http://127.0.0.1:${appPort}`],
+        credentials: true,
+      },
       proxy: {
         [`${prefix}/cloud/device`]: {
           target: cloudTarget,
@@ -46,6 +49,7 @@ export default defineConfig(({ mode }) => {
               Cookie: cookie,
             },
           }),
+          rewrite: (path) => `${cloudApiPrefix}${path}`,
         },
         [`${prefix}/cloud`]: {
           target: cloudTarget,
@@ -56,9 +60,7 @@ export default defineConfig(({ mode }) => {
               Cookie: cookie,
             },
           }),
-          rewrite: (path) => {
-            return path.replace(new RegExp(`^${prefix}/cloud`), cloudApiPrefix)
-          },
+          rewrite: (path) => `${cloudApiPrefix}${path}`,
           configure: (proxy) => {
             proxy.on("proxyReq", (proxyReq) => {
               if (proxyReq.path.endsWith("/global/event")) {
@@ -77,10 +79,10 @@ export default defineConfig(({ mode }) => {
           }),
           rewrite: (path) => {
             if (path.startsWith(v2Prefix)) {
-              return path.replace(new RegExp(`^${apiPrefix}`), cloudDashboardPrefix)
+              return `${cloudDashboardPrefix}${path}`
             }
 
-            return path.replace(new RegExp(`^${apiPrefix}`), cloudApiPrefix)
+            return `${cloudApiPrefix}${path}`
           },
         },
         [`${quotaPrefix}/quota-manager`]: {

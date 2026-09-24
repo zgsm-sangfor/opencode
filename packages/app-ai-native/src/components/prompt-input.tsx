@@ -1655,6 +1655,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                       onSelect={(x) => local.model.variant.set(x === "default" ? undefined : x)}
                       class="capitalize max-w-30 sm:max-w-none min-w-0 shrink"
                       valueClass="truncate text-13-regular"
+                      triggerProps={{ "data-action": "model-variant-cycle" }}
                       triggerStyle={{
                         height: "28px",
                         opacity: buttonsSpring(),
