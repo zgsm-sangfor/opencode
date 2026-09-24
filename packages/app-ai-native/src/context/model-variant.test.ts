@@ -63,4 +63,24 @@ describe("model variant", () => {
 
     expect(value).toBe("low")
   })
+
+  test("explicit default overrides the configured variant", () => {
+    const value = resolveModelVariant({
+      variants: ["low", "high", "xhigh"],
+      selected: null,
+      configured: "high",
+    })
+
+    expect(value).toBeUndefined()
+  })
+
+  test("cycles from explicit default to the first variant", () => {
+    const value = cycleModelVariant({
+      variants: ["low", "high", "xhigh"],
+      selected: null,
+      configured: "high",
+    })
+
+    expect(value).toBe("low")
+  })
 })
