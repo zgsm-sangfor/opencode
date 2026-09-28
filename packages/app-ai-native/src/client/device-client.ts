@@ -83,6 +83,11 @@ export type FileReadData = {
   totalLines: number
 }
 
+export type MessagePage = {
+  items: unknown[]
+  nextCursor?: string
+}
+
 export type DeviceClient = {
   baseUrl: string
   directory?: string
@@ -130,6 +135,7 @@ export type DeviceClient = {
     prompt: (id: string, body: unknown) => Promise<unknown>
     promptAsync: (id: string, body: unknown) => Promise<unknown>
     messages: (id: string, input?: QueryInput) => Promise<unknown>
+    messagesPage: (id: string, input?: QueryInput) => Promise<MessagePage>
     todo: (id: string) => Promise<unknown>
     tasks: (id: string) => Promise<unknown>
     shell: (id: string, body: unknown) => Promise<unknown>
@@ -176,6 +182,15 @@ export function createDeviceClient(opts: ClientOpts): DeviceClient {
     directory: opts.directory,
     throwOnError: opts.throwOnError,
   })
+
+  const messagesPage = async (id: string, input?: QueryInput) => {
+    const result = await http.getResponse<unknown>(`/api/v1/conversations/${id}/messages`, input)
+    const cursor = result.response.headers.get("X-Next-Cursor")?.trim()
+    return {
+      items: Array.isArray(result.data) ? result.data : [],
+      ...(cursor ? { nextCursor: cursor } : {}),
+    }
+  }
 
   return {
     baseUrl: opts.baseUrl,
@@ -257,7 +272,8 @@ export function createDeviceClient(opts: ClientOpts): DeviceClient {
       abort: (id: string) => http.post(`/api/v1/conversations/${id}/abort`),
       prompt: (id: string, body: unknown) => http.post(`/api/v1/conversations/${id}/prompt`, body),
       promptAsync: (id: string, body: unknown) => http.post(`/api/v1/conversations/${id}/prompt/async`, body),
-      messages: (id: string, input?: QueryInput) => http.get(`/api/v1/conversations/${id}/messages`, input),
+      messagesPage,
+      messages: async (id: string, input?: QueryInput) => (await messagesPage(id, input)).items,
       todo: (id: string) => http.get(`/api/v1/conversations/${id}/todo`),
       tasks: (id: string) => http.get(`/api/v1/conversations/${id}/tasks`),
       shell: (id: string, body: unknown) => http.post(`/api/v1/conversations/${id}/shell`, body),

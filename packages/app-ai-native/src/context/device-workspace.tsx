@@ -33,6 +33,7 @@ function arr<T>(res: unknown, key?: string): T[] {
 type WorkspaceData = {
   status: "loading" | "ready" | "unavailable"
   agent: Agent[]
+  agentCapabilities: string[] | undefined
   command: Command[]
   session: Session[]
   sessionStatus: Record<string, SessionStatus>
@@ -54,6 +55,7 @@ type DeviceWorkspaceValue = {
   data: WorkspaceData
   ready: () => boolean
   agentAvailable: () => boolean
+  capabilities: () => string[] | undefined
   project: {
     worktree: string
     name: string | undefined
@@ -110,6 +112,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
   const [store, setStore] = createStore<WorkspaceData>({
     status: "loading",
     agent: [],
+    agentCapabilities: undefined,
     command: [],
     session: [],
     sessionStatus: {},
@@ -159,6 +162,23 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
     }
   }
 
+  const checkAgentCapabilities = async () => {
+    try {
+      const res = (await device.client.agent.list()) as {
+        agents?: Array<{ id?: string; backend?: string; available?: boolean; capabilities?: unknown }>
+      }
+      const agents = Array.isArray(res?.agents) ? res.agents : []
+      const name = store.agentInfo?.name
+      const agent = agents.find((item) => (item.id ?? item.backend) === name) ?? agents.find((item) => item.available) ?? agents[0]
+      const capabilities = Array.isArray(agent?.capabilities)
+        ? agent.capabilities.filter((item): item is string => typeof item === "string")
+        : []
+      setStore("agentCapabilities", capabilities)
+    } catch {
+      setStore("agentCapabilities", undefined)
+    }
+  }
+
   const bootstrap = async () => {
     setStore("status", "loading")
     try {
@@ -167,6 +187,8 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
         setStore("status", "unavailable")
         return
       }
+
+      await checkAgentCapabilities()
 
       // Fire-and-forget: version query may be slow, don't block bootstrap
       checkAgentVersion()
@@ -1070,6 +1092,7 @@ export function DeviceWorkspaceProvider(props: ParentProps<{ workspaceId?: strin
     get data() { return store },
     ready: () => store.status !== "loading",
     agentAvailable: () => store.agentAvailable,
+    capabilities: () => store.agentCapabilities,
     get project() { return projectValue() },
     session: {
       get: getSession,

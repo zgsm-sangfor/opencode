@@ -31,6 +31,7 @@ export function DeviceSessionChatProvider(props: ParentProps) {
     vcsLoad: () => workspace.vcs.load().then(() => {}),
 
     agentAvailable: () => workspace.agentAvailable(),
+    capabilities: () => workspace.capabilities(),
 
     messages: (id) => store.data.messages[id] ?? [],
     parts: () => store.data.parts,
@@ -40,7 +41,9 @@ export function DeviceSessionChatProvider(props: ParentProps) {
 
     loadMessages: (id) => store.loadMessages(id),
     loadTodo: (id) => store.todo(id),
+    historyMore: (id) => store.historyMore(id),
     historyLoading: (id) => store.historyLoading(id),
+    historyLoadMore: (id) => store.historyLoadMore(id),
     clearUnread: (id) => workspace.session.clearUnread(id),
 
     getSession: (id) => workspace.session.get(id),
