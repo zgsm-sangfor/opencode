@@ -6,7 +6,7 @@ import { isNotFoundError } from "@/client/device-transport"
 import { useDeviceSDK } from "./device-sdk"
 import { useDeviceWorkspace } from "./device-workspace"
 import { useLanguage } from "./language"
-import type { Message, Part, Session, SessionStatus, FileDiff, Todo, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2/client"
+import type { Message, Part, Session, SessionStatus, Todo, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2/client"
 
 export type SessionError = {
   subtype?: string
@@ -33,7 +33,6 @@ type SessionSlice = {
   messages: Record<string, Message[]>
   parts: Record<string, Part[]>
   status: Record<string, SessionStatus>
-  diffs: Record<string, FileDiff[]>
   todos: Record<string, Todo[]>
   permissions: Record<string, PermissionRequest[]>
   questions: Record<string, QuestionRequest[]>
@@ -49,7 +48,6 @@ type StoreValue = {
   loadMessages: (sessionID: string, limit?: number) => Promise<void>
   syncSession: (sessionID: string) => Promise<void>
   loadTasks: (sessionID: string) => Promise<void>
-  diff: (sessionID: string) => Promise<void>
   todo: (sessionID: string) => Promise<void>
   optimisticAdd: (input: { sessionID: string; message: Message; parts: Part[] }) => void
   optimisticRemove: (input: { sessionID: string; messageID: string }) => void
@@ -72,7 +70,6 @@ type DeviceSessionValue = {
     messages: Record<string, Message[]>
     parts: Record<string, Part[]>
     status: SessionStatus | undefined
-    diffs: FileDiff[]
     todos: Todo[]
     permissions: Record<string, PermissionRequest[]>
     questions: Record<string, QuestionRequest[]>
@@ -86,7 +83,6 @@ type DeviceSessionValue = {
   sync: () => Promise<void>
   loadMessages: (sessionID: string, limit?: number) => Promise<void>
   reconcileMessages: (sessionID: string) => Promise<void>
-  diff: (sessionID: string) => Promise<void>
   todo: (sessionID: string) => Promise<void>
   optimistic: {
     add(input: { sessionID: string; message: Message; parts: Part[] }): void
@@ -182,7 +178,6 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
     messages: {},
     parts: {},
     status: {},
-    diffs: {},
     todos: {},
     permissions: {},
     questions: {},
@@ -272,17 +267,6 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
       }
       setStore("tasks", id, taskMap)
     } catch {}
-  }
-
-  const diffSession = async (sessionID: string) => {
-    if (!workspace.agentAvailable()) return
-    return runInflight(`diff:${sessionID}`, async () => {
-      try {
-        const result = await device.client.conversation.diff(sessionID)
-        const diffs = ((result as FileDiff[]) ?? [])
-        setStore("diffs", sessionID, diffs)
-      } catch {}
-    })
   }
 
   const todoSession = async (sessionID: string) => {
@@ -457,11 +441,6 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
           }))
           break
         }
-        case "session.diff": {
-          const props = payload.properties as { sessionID?: string; diff?: FileDiff[] }
-          if (props.diff && eventSID) setStore("diffs", eventSID, props.diff)
-          break
-        }
         case "todo.updated": {
           const props = payload.properties as { sessionID?: string; todos?: Todo[] }
           if (props.todos && eventSID) setStore("todos", eventSID, props.todos)
@@ -566,7 +545,6 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
     loadMessages,
     syncSession,
     loadTasks,
-    diff: diffSession,
     todo: todoSession,
     optimisticAdd,
     optimisticRemove,
@@ -599,7 +577,6 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
     get messages() { return store.data.messages },
     get parts() { return store.data.parts },
     get status() { return sid() ? (store.data.status[sid()!] ?? idle) : undefined },
-    get diffs() { return sid() ? (store.data.diffs[sid()!] ?? []) : [] },
     get todos() { return sid() ? (store.data.todos[sid()!] ?? []) : [] },
     get permissions() { return store.data.permissions },
     get questions() { return store.data.questions },
@@ -618,7 +595,6 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
     reconcileMessages: async (sessionID: string) => {
       await store.loadMessages(sessionID, MESSAGE_PAGE_SIZE)
     },
-    diff: store.diff,
     todo: store.todo,
     optimistic: {
       add: store.optimisticAdd,

@@ -19,7 +19,6 @@ import type {
   Part,
   Session,
   SessionStatus,
-  FileDiff,
   Todo,
 } from "@opencode-ai/sdk/v2/client"
 import type { Path } from "@opencode-ai/sdk/v2/client"
@@ -393,7 +392,6 @@ export function DeviceSessionView(props: {
         "": effectiveStatus(),
         undefined: effectiveStatus(),
       } as Record<string, SessionStatus>,
-      session_diff: {} as Record<string, FileDiff[]>,
       todo: { [cid ?? ""]: chat.todos(cid ?? "") } as Record<string, Todo[]>,
       permission: chat.permissions(),
       question: chat.questions(),

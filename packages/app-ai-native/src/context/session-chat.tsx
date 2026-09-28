@@ -4,7 +4,6 @@ import type {
   Part,
   Session,
   SessionStatus,
-  FileDiff,
   Todo,
   Command,
   Agent,
