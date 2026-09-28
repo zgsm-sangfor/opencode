@@ -3,6 +3,17 @@ import { createMemo, createUniqueId, splitProps, Show } from "solid-js"
 import sprite from "./file-icons/sprite.svg"
 import type { IconName } from "./file-icons/types"
 
+export function preloadFileIcons() {
+  if (typeof document === "undefined" || document.querySelector("link[data-file-icons]")) return
+  const link = document.createElement("link")
+  link.dataset.fileIcons = ""
+  link.rel = "preload"
+  link.as = "image"
+  link.type = "image/svg+xml"
+  link.href = sprite
+  document.head.appendChild(link)
+}
+
 export type FileIconProps = JSX.GSVGAttributes<SVGSVGElement> & {
   node: { path: string; type: "file" | "directory" }
   expanded?: boolean

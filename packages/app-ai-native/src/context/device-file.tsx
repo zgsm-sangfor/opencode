@@ -1,5 +1,6 @@
 import { batch, createContext, createEffect, createMemo, onCleanup, useContext } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
+import { preloadFileIcons } from "@opencode-ai/ui/file-icon"
 import { showToast } from "@opencode-ai/ui/toast"
 import { getFilename } from "@opencode-ai/util/path"
 import type { ParentProps } from "solid-js"
@@ -77,6 +78,7 @@ export function DeviceFileProvider(props: DeviceFileProviderProps) {
   const device = useDeviceSDK()
   const workspace = useDeviceWorkspace()
   const language = useLanguage()
+  preloadFileIcons()
 
   const scope = createMemo(() => device.directory)
   const path = createPathHelpers(scope)
@@ -368,14 +370,33 @@ export function DeviceFileProvider(props: DeviceFileProviderProps) {
   }
 
   let searchTimer: ReturnType<typeof setTimeout> | undefined
+  let searchAbort: AbortController | undefined
+  let searchCancel: (() => void) | undefined
+  const stopSearch = () => {
+    if (searchTimer) clearTimeout(searchTimer)
+    searchTimer = undefined
+    searchAbort?.abort()
+    searchAbort = undefined
+    searchCancel?.()
+    searchCancel = undefined
+  }
   const search = (query: string, dirs: "true" | "false") =>
     new Promise<string[]>((resolve) => {
-      if (searchTimer) clearTimeout(searchTimer)
+      stopSearch()
+      searchCancel = () => resolve([])
+      const controller = new AbortController()
+      searchAbort = controller
       searchTimer = setTimeout(() => {
         searchTimer = undefined
-        device.client.runtime.findFiles(query, dirs).then(
-          (x) => resolve(((x as string[] | undefined) ?? []).map(path.normalize)),
-          () => resolve([]),
+        const settle = (paths: string[]) => {
+          if (searchAbort !== controller) return
+          searchAbort = undefined
+          searchCancel = undefined
+          resolve(paths)
+        }
+        device.client.runtime.findFiles(query, dirs, controller.signal).then(
+          (x) => settle(((x as string[] | undefined) ?? []).map(path.normalize)),
+          () => settle([]),
         )
       }, 300)
     })
@@ -404,6 +425,7 @@ export function DeviceFileProvider(props: DeviceFileProviderProps) {
     treeScheduler.stop()
     diffScheduler.stop()
     treePollingRef = undefined
+    stopSearch()
     refresh.cancelAll()
   })
 
@@ -456,6 +478,7 @@ export function DeviceFileProvider(props: DeviceFileProviderProps) {
     },
     searchFiles: (query: string) => search(query, "false"),
     searchFilesAndDirectories: (query: string) => search(query, "true"),
+    cancelSearch: stopSearch,
   }
 
   return (

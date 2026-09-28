@@ -455,7 +455,9 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   }
 
   const {
+    grouped: atGrouped,
     flat: atFlat,
+    filter: atFilter,
     active: atActive,
     setActive: setAtActive,
     onInput: atOnInput,
@@ -467,7 +469,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       const open = recent()
       const seen = new Set(open)
       const pinned: AtOption[] = open.map((path) => ({ type: "file", path, display: path, recent: true }))
-      if (!query.trim()) return [...workspaces, ...agents, ...pinned]
+      if (!query.trim()) {
+        files.cancelSearch()
+        return [...workspaces, ...agents, ...pinned]
+      }
       const paths = await files.searchFilesAndDirectories(query)
       const fileOptions: AtOption[] = paths
         .filter((path) => !seen.has(path))
@@ -495,20 +500,37 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     maxItems: 10,
   })
 
-  let wsSearchTimer: ReturnType<typeof setTimeout> | undefined
+  let wsTimer: ReturnType<typeof setTimeout> | undefined
+  let wsAbort: AbortController | undefined
+  let wsCancel: (() => void) | undefined
+  const stopWs = () => {
+    if (wsTimer) clearTimeout(wsTimer)
+    wsTimer = undefined
+    wsAbort?.abort()
+    wsAbort = undefined
+    wsCancel?.()
+    wsCancel = undefined
+  }
   const searchWorkspaceFiles = (query: string, directory: string) => {
     const normalized = query.replace(/\\/g, "/")
     const scoped = device.createClient({ directory, throwOnError: true })
     return new Promise<string[]>((resolve) => {
-      if (wsSearchTimer) clearTimeout(wsSearchTimer)
+      stopWs()
+      wsCancel = () => resolve([])
+      const controller = new AbortController()
+      wsAbort = controller
       const delay = query.trim() ? 300 : 0
-      wsSearchTimer = setTimeout(() => {
-        wsSearchTimer = undefined
-        scoped.runtime.findFiles(normalized, "true").then(
-          (x) => {
-            resolve((x as string[] | undefined) ?? [])
-          },
-          () => resolve([]),
+      wsTimer = setTimeout(() => {
+        wsTimer = undefined
+        const settle = (paths: string[]) => {
+          if (wsAbort !== controller) return
+          wsAbort = undefined
+          wsCancel = undefined
+          resolve(paths)
+        }
+        scoped.runtime.findFiles(normalized, "true", controller.signal).then(
+          (x) => settle((x as string[] | undefined) ?? []),
+          () => settle([]),
         )
       }, delay)
     })
@@ -542,11 +564,24 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   }
 
   const exitWorkspaceFileSearch = () => {
+    stopWs()
     setStore("workspaceFileSearch", null)
     trimAfterAt()
     atOnInput("")
     focusEditorEnd()
   }
+
+  createEffect(() => {
+    const popover = store.popover
+    const scope = store.workspaceFileSearch
+    if (popover !== "at" || !scope) stopWs()
+    if (popover !== "at") files.cancelSearch()
+  })
+
+  onCleanup(() => {
+    stopWs()
+    files.cancelSearch()
+  })
 
   const handleWsFileSelect = (option: AtOption | undefined) => {
     if (!option || option.type !== "file") return
@@ -554,6 +589,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   }
 
   const {
+    grouped: wsFileGrouped,
     flat: wsFileFlat,
     active: wsFileActive,
     setActive: wsFileSetActiveActive,
@@ -1352,6 +1388,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
         setSlashActive={setSlashActive}
         onSlashSelect={handleSlashSelect}
         commandKeybind={command.keybind}
+        loading={
+          store.popover === "at" &&
+          (store.workspaceFileSearch ? wsFileGrouped.loading : !!atFilter().trim() && atGrouped.loading)
+        }
         t={(key) => language.t(key as Parameters<typeof language.t>[0])}
       />
       <DockShellForm

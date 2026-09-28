@@ -103,7 +103,7 @@ export type DeviceClient = {
     roots: () => Promise<Array<{ name: string; path: string; absolute: string; type: "directory" | "file"; ignored: boolean }>>
     fileMeta: (path: string) => Promise<FileMetaData>
     fileRead: (path: string, input?: { offset?: number; limit?: number }) => Promise<FileReadData>
-    findFiles: (query: string, dirs: "true" | "false") => Promise<unknown>
+    findFiles: (query: string, dirs: "true" | "false", signal?: AbortSignal) => Promise<unknown>
     diff: (input?: { staged?: boolean; stat?: boolean; path?: string }) => Promise<DiffData | undefined>
     diffContent: (input?: { staged?: boolean; path?: string }) => Promise<DiffContentData | undefined>
     initStatus: () => Promise<InitStatusData | undefined>
@@ -229,8 +229,8 @@ export function createDeviceClient(opts: ClientOpts): DeviceClient {
         lines: res?.lines ?? 0,
         totalLines: res?.total_lines ?? 0,
       })),
-      findFiles: (query: string, dirs: "true" | "false") =>
-        http.get("/api/v1/runtime/find/file", { query, dirs }),
+      findFiles: (query: string, dirs: "true" | "false", signal?: AbortSignal) =>
+        http.get("/api/v1/runtime/find/file", { query, dirs }, signal),
     diff: (input?: { staged?: boolean; stat?: boolean; path?: string }) =>
       http.get<DiffData>("/api/v1/runtime/diff", input as Record<string, string | number | boolean | undefined>),
     diffContent: (input?: { staged?: boolean; path?: string }) =>
