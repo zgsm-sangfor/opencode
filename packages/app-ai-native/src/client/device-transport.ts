@@ -130,31 +130,35 @@ export function createDeviceTransport(opts: TransportOpts) {
       throw new DeviceHttpError(`Request failed: ${res.status}`, res.status, "UNKNOWN")
     }
 
-    if (res.status === 204 || res.status === 205) return undefined as T
+    if (res.status === 204 || res.status === 205) return { data: undefined as T, response: res }
 
     if (data && typeof data === "object" && "ok" in data && "data" in data && data.data != null) {
       data = data.data
     }
 
-    return data as T
+    return { data: data as T, response: res }
   }
 
   return {
     get<T>(path: string, input?: Query & { directory?: string }, signal?: AbortSignal) {
       const { directory, ...query } = input ?? ({} as Query & { directory?: string })
+      return run<T>("GET", path, { query, signal, directory }).then((result) => result.data)
+    },
+    getResponse<T>(path: string, input?: Query & { directory?: string }, signal?: AbortSignal) {
+      const { directory, ...query } = input ?? ({} as Query & { directory?: string })
       return run<T>("GET", path, { query, signal, directory })
     },
     post<T>(path: string, body?: unknown, signal?: AbortSignal) {
-      return run<T>("POST", path, { body, signal })
+      return run<T>("POST", path, { body, signal }).then((result) => result.data)
     },
     put<T>(path: string, body?: unknown, signal?: AbortSignal) {
-      return run<T>("PUT", path, { body, signal })
+      return run<T>("PUT", path, { body, signal }).then((result) => result.data)
     },
     patch<T>(path: string, body?: unknown, signal?: AbortSignal) {
-      return run<T>("PATCH", path, { body, signal })
+      return run<T>("PATCH", path, { body, signal }).then((result) => result.data)
     },
     delete<T>(path: string, signal?: AbortSignal) {
-      return run<T>("DELETE", path, { signal })
+      return run<T>("DELETE", path, { signal }).then((result) => result.data)
     },
   }
 }

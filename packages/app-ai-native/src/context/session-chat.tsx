@@ -4,7 +4,6 @@ import type {
   Part,
   Session,
   SessionStatus,
-  FileDiff,
   Todo,
   Command,
   Agent,
@@ -50,6 +49,7 @@ export interface SessionChatBackend {
   vcsLoad: () => Promise<void>
 
   agentAvailable: () => boolean
+  capabilities: () => string[] | undefined
 
   messages: (id: string) => Message[]
   parts: () => Record<string, Part[]>
@@ -59,7 +59,9 @@ export interface SessionChatBackend {
 
   loadMessages: (id: string) => Promise<void>
   loadTodo: (id: string) => Promise<void>
+  historyMore: (id: string) => boolean
   historyLoading: (id: string) => boolean
+  historyLoadMore: (id: string) => Promise<void>
   clearUnread: (id: string) => void
 
   getSession: (id: string) => Session | undefined

@@ -12,7 +12,6 @@ export type ConversationAdapter = {
   sessionUpdate: (input: { sessionID: string } & Record<string, unknown>) => Promise<{ data: unknown }>
   sessionDelete: (sessionID: string) => Promise<{ data: unknown }>
   sessionMessages: (sessionID: string, directory: string, limit: number) => Promise<{ data: unknown }>
-  sessionDiff: (sessionID: string) => Promise<{ data: unknown }>
   sessionTodo: (sessionID: string) => Promise<{ data: unknown }>
   sessionList: (directory?: string) => Promise<{ data: unknown }>
   sessionStatus: () => Promise<{ data: unknown }>
@@ -53,7 +52,6 @@ export function deviceAdapter(client: DeviceClient): ConversationAdapter {
     sessionList: (directory) => wrap(client.conversation.list(directory ? { directory } : undefined)),
     sessionMessages: (id, _directory, limit) => wrap(client.conversation.messages(id, { limit })),
     sessionStatus: () => wrap(client.conversation.status()),
-    sessionDiff: (id) => wrap(client.conversation.diff(id)),
     sessionTodo: (id) => wrap(client.conversation.todo(id)),
     sessionCreate: (body?: unknown) => wrap(client.conversation.create(body)),
     sessionUpdate: (input) => wrap(client.conversation.update(input.sessionID, input)),

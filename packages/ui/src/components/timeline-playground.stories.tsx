@@ -1193,7 +1193,6 @@ function Playground() {
   const data = createMemo(() => ({
     session: [session()],
     session_status: {},
-    session_diff: {},
     message: { [session().id]: state.messages },
     part: state.parts,
     provider: {

@@ -66,6 +66,24 @@ describe("createDeviceTransport status handling", () => {
     expect(onUnauthorized).not.toHaveBeenCalled()
   })
 
+  test("getResponse preserves response headers", async () => {
+    globalThis.fetch = ((() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ ok: true, data: [{ id: "message-1" }] }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "X-Next-Cursor": "cursor-1",
+          },
+        }),
+      )) as unknown) as typeof fetch
+    const transport = createDeviceTransport({ baseUrl: "https://test.local" })
+
+    const result = await transport.getResponse("/x")
+    expect(result.data).toEqual([{ id: "message-1" }])
+    expect(result.response.headers.get("X-Next-Cursor")).toBe("cursor-1")
+  })
+
   test("other error statuses trigger neither handler", async () => {
     respond(500)
     const transport = createDeviceTransport({ baseUrl: "https://test.local" })

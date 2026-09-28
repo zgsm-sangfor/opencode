@@ -6,7 +6,7 @@ import { isNotFoundError } from "@/client/device-transport"
 import { useDeviceSDK } from "./device-sdk"
 import { useDeviceWorkspace } from "./device-workspace"
 import { useLanguage } from "./language"
-import type { Message, Part, Session, SessionStatus, FileDiff, Todo, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2/client"
+import type { Message, Part, Session, SessionStatus, Todo, PermissionRequest, QuestionRequest } from "@opencode-ai/sdk/v2/client"
 
 export type SessionError = {
   subtype?: string
@@ -32,8 +32,8 @@ type SessionSlice = {
   session: Session | undefined
   messages: Record<string, Message[]>
   parts: Record<string, Part[]>
+  historyCursor: Record<string, string | undefined>
   status: Record<string, SessionStatus>
-  diffs: Record<string, FileDiff[]>
   todos: Record<string, Todo[]>
   permissions: Record<string, PermissionRequest[]>
   questions: Record<string, QuestionRequest[]>
@@ -49,7 +49,6 @@ type StoreValue = {
   loadMessages: (sessionID: string, limit?: number) => Promise<void>
   syncSession: (sessionID: string) => Promise<void>
   loadTasks: (sessionID: string) => Promise<void>
-  diff: (sessionID: string) => Promise<void>
   todo: (sessionID: string) => Promise<void>
   optimisticAdd: (input: { sessionID: string; message: Message; parts: Part[] }) => void
   optimisticRemove: (input: { sessionID: string; messageID: string }) => void
@@ -62,7 +61,7 @@ type StoreValue = {
   }) => void
   historyMore: (sessionID: string) => boolean
   historyLoading: (sessionID?: string) => boolean
-  historyLoadMore: (sessionID: string, count?: number) => Promise<void>
+  historyLoadMore: (sessionID: string) => Promise<void>
   permissionRespond: (input: { permissionID: string; response: "once" | "always" | "reject" }) => void
 }
 
@@ -72,7 +71,6 @@ type DeviceSessionValue = {
     messages: Record<string, Message[]>
     parts: Record<string, Part[]>
     status: SessionStatus | undefined
-    diffs: FileDiff[]
     todos: Todo[]
     permissions: Record<string, PermissionRequest[]>
     questions: Record<string, QuestionRequest[]>
@@ -86,7 +84,6 @@ type DeviceSessionValue = {
   sync: () => Promise<void>
   loadMessages: (sessionID: string, limit?: number) => Promise<void>
   reconcileMessages: (sessionID: string) => Promise<void>
-  diff: (sessionID: string) => Promise<void>
   todo: (sessionID: string) => Promise<void>
   optimistic: {
     add(input: { sessionID: string; message: Message; parts: Part[] }): void
@@ -102,7 +99,7 @@ type DeviceSessionValue = {
   history: {
     more(sessionID: string): boolean
     loading(sessionID?: string): boolean
-    loadMore(sessionID: string, count?: number): Promise<void>
+    loadMore(sessionID: string): Promise<void>
   }
   permission: {
     respond(input: { permissionID: string; response: "once" | "always" | "reject" }): void
@@ -170,6 +167,21 @@ export function treeEvent(input: {
   return input.tree.has(input.eventSID)
 }
 
+function unpack(input: unknown) {
+  const result = new Map<string, { info: Message; parts?: Part[] }>()
+  if (!Array.isArray(input)) return result
+  for (const item of input) {
+    if (!item || typeof item !== "object") continue
+    const entry = item as { info?: Message; parts?: unknown }
+    if (!entry.info?.id) continue
+    result.set(entry.info.id, {
+      info: entry.info,
+      parts: Array.isArray(entry.parts) ? (entry.parts as Part[]) : undefined,
+    })
+  }
+  return result
+}
+
 // ── Shared Store Provider ──
 
 export function DeviceSessionStoreProvider(props: ParentProps) {
@@ -181,8 +193,8 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
     session: undefined,
     messages: {},
     parts: {},
+    historyCursor: {},
     status: {},
-    diffs: {},
     todos: {},
     permissions: {},
     questions: {},
@@ -205,34 +217,64 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
   }
 
   const BATCH_SIZE = 10
+  // Older servers do not expose capability metadata, so an undefined list still
+  // trusts the X-Next-Cursor response header.
+  const paging = () => workspace.capabilities()?.includes("messages.pagination") !== false
+  // Declared paging agents can fetch older pages on demand, so keep the first
+  // request small. Unknown capability keeps the larger non-paged snapshot.
+  const declared = () => workspace.capabilities()?.includes("messages.pagination") === true
+  const initial = () => (declared() ? MESSAGE_PAGE_SIZE : MESSAGE_INITIAL_LIMIT)
 
   const loadMessages = async (sessionID: string, limit?: number) => {
     if (store.messages[sessionID]?.length) return
     return runInflight(`messages:${sessionID}`, async () => {
       loadingSessions.add(sessionID)
       try {
-        const loadLimit = limit ?? MESSAGE_INITIAL_LIMIT
-        const result = await device.client.conversation.messages(sessionID, { limit: loadLimit })
-        if (!result) return
-        const raw = Array.isArray(result) ? result : []
-
-        const fetched = new Map<string, { info: Message; parts?: Part[] }>()
-        for (const item of raw as any[]) {
-          if (!item?.info?.id) continue
-          fetched.set(item.info.id, {
-            info: item.info as Message,
-            parts: Array.isArray(item.parts) ? (item.parts as Part[]) : undefined,
-          })
-        }
-
+        const loadLimit = limit ?? initial()
+        const page = await device.client.conversation.messagesPage(sessionID, { limit: loadLimit })
+        const fetched = unpack(page.items)
         const msgs = [...fetched.values()].map((d) => d.info)
-        setStore("messages", sessionID, msgs)
 
-        for (const [mid, data] of fetched) {
-          if (data.parts && data.parts.length > 0) {
-            setStore("parts", mid, data.parts)
+        batch(() => {
+          setStore("messages", sessionID, msgs)
+          setStore("historyCursor", sessionID, page.nextCursor)
+          for (const [mid, data] of fetched) {
+            if (data.parts && data.parts.length > 0) {
+              setStore("parts", mid, data.parts)
+            }
           }
-        }
+        })
+      } finally {
+        loadingSessions.delete(sessionID)
+      }
+    })
+  }
+
+  const loadEarlier = async (sessionID: string) => {
+    const cursor = store.historyCursor[sessionID]
+    if (!cursor || !paging()) return
+    return runInflight(`messages:${sessionID}`, async () => {
+      loadingSessions.add(sessionID)
+      try {
+        const page = await device.client.conversation.messagesPage(sessionID, {
+          limit: MESSAGE_PAGE_SIZE,
+          before: cursor,
+        })
+        const fetched = unpack(page.items)
+        const known = new Set((store.messages[sessionID] ?? []).map((item) => item.id))
+        const msgs = [...fetched.values()].filter((item) => !known.has(item.info.id)).map((item) => item.info)
+
+        batch(() => {
+          if (msgs.length > 0) {
+            setStore("messages", sessionID, (current) => [...msgs, ...(current ?? [])])
+          }
+          setStore("historyCursor", sessionID, page.nextCursor)
+          for (const [mid, data] of fetched) {
+            if (data.parts && data.parts.length > 0 && !store.parts[mid]?.length) {
+              setStore("parts", mid, data.parts)
+            }
+          }
+        })
       } finally {
         loadingSessions.delete(sessionID)
       }
@@ -272,17 +314,6 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
       }
       setStore("tasks", id, taskMap)
     } catch {}
-  }
-
-  const diffSession = async (sessionID: string) => {
-    if (!workspace.agentAvailable()) return
-    return runInflight(`diff:${sessionID}`, async () => {
-      try {
-        const result = await device.client.conversation.diff(sessionID)
-        const diffs = ((result as FileDiff[]) ?? [])
-        setStore("diffs", sessionID, diffs)
-      } catch {}
-    })
   }
 
   const todoSession = async (sessionID: string) => {
@@ -457,11 +488,6 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
           }))
           break
         }
-        case "session.diff": {
-          const props = payload.properties as { sessionID?: string; diff?: FileDiff[] }
-          if (props.diff && eventSID) setStore("diffs", eventSID, props.diff)
-          break
-        }
         case "todo.updated": {
           const props = payload.properties as { sessionID?: string; todos?: Todo[] }
           if (props.todos && eventSID) setStore("todos", eventSID, props.todos)
@@ -566,21 +592,13 @@ export function DeviceSessionStoreProvider(props: ParentProps) {
     loadMessages,
     syncSession,
     loadTasks,
-    diff: diffSession,
     todo: todoSession,
     optimisticAdd,
     optimisticRemove,
     addOptimisticMessage,
-    historyMore: (sessionID: string) => (store.messages[sessionID]?.length ?? 0) >= MESSAGE_PAGE_SIZE,
+    historyMore: (sessionID: string) => paging() && !!store.historyCursor[sessionID],
     historyLoading,
-    historyLoadMore: async (sessionID: string, count?: number) => {
-      // No-op once cached: loadMessages only writes on cold start (no cache),
-      // so this is effective only for the very first load. After that SSE is
-      // the sole writer. To re-enable incremental history loading, loadMessages
-      // needs a bypass flag or this needs its own fetch path.
-      const current = store.messages[sessionID]?.length ?? 0
-      await loadMessages(sessionID, current + (count ?? MESSAGE_PAGE_SIZE))
-    },
+    historyLoadMore: loadEarlier,
     permissionRespond,
   }
 
@@ -599,7 +617,6 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
     get messages() { return store.data.messages },
     get parts() { return store.data.parts },
     get status() { return sid() ? (store.data.status[sid()!] ?? idle) : undefined },
-    get diffs() { return sid() ? (store.data.diffs[sid()!] ?? []) : [] },
     get todos() { return sid() ? (store.data.todos[sid()!] ?? []) : [] },
     get permissions() { return store.data.permissions },
     get questions() { return store.data.questions },
@@ -618,7 +635,6 @@ export function DeviceSessionProvider(props: ParentProps<{ sessionID?: string }>
     reconcileMessages: async (sessionID: string) => {
       await store.loadMessages(sessionID, MESSAGE_PAGE_SIZE)
     },
-    diff: store.diff,
     todo: store.todo,
     optimistic: {
       add: store.optimisticAdd,

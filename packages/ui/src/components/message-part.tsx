@@ -1306,7 +1306,7 @@ function ToolFileAccordion(props: { path: string; actions?: JSX.Element; childre
         <StickyAccordionHeader>
           <Accordion.Trigger>
             <div data-slot="apply-patch-trigger-content">
-              <div data-slot="apply-patch-file-info">
+              <div data-slot="apply-patch-file-info" title={props.path}>
                 <FileIcon node={{ path: props.path, type: "file" }} />
                 <div data-slot="apply-patch-file-name-container">
                   <Show when={props.path.includes("/")}>
@@ -2245,7 +2245,15 @@ ToolRegistry.register({
   render(props) {
     const i18n = useI18n()
     const fileComponent = useFileComponent()
-    const files = createMemo(() => patchFiles(props.metadata.files))
+    const files = createMemo(() =>
+      patchFiles(
+        props.metadata.files ??
+          props.metadata.fileChanges ??
+          props.metadata.changes ??
+          props.metadata.diffs ??
+          props.metadata.filediff,
+      ),
+    )
     const pending = createMemo(() => props.status === "pending" || props.status === "running")
     const filtered = createMemo(() => getFilteredMeta(props.metadata))
     const single = createMemo(() => {
@@ -2318,7 +2326,7 @@ ToolRegistry.register({
                           <StickyAccordionHeader>
                             <Accordion.Trigger>
                               <div data-slot="apply-patch-trigger-content">
-                                <div data-slot="apply-patch-file-info">
+                                <div data-slot="apply-patch-file-info" title={file.relativePath}>
                                   <FileIcon node={{ path: file.relativePath, type: "file" }} />
                                   <div data-slot="apply-patch-file-name-container">
                                     <Show when={file.relativePath.includes("/")}>
@@ -2356,7 +2364,12 @@ ToolRegistry.register({
                           <Accordion.Content>
                             <Show when={visible()}>
                               <div data-component="apply-patch-file-diff">
-                                <Dynamic component={fileComponent} mode="diff" fileDiff={file.view.fileDiff} />
+                                <Dynamic
+                                  component={fileComponent}
+                                  mode="diff"
+                                  before={{ name: file.view.fileDiff.name, contents: file.view.deletions }}
+                                  after={{ name: file.view.fileDiff.name, contents: file.view.additions }}
+                                />
                               </div>
                             </Show>
                           </Accordion.Content>
@@ -2378,7 +2391,7 @@ ToolRegistry.register({
             trigger={
               <div data-component="edit-trigger">
                 <div data-slot="message-part-title-area">
-                  <div data-slot="message-part-title">
+                  <div data-slot="message-part-title" title={!pending() ? single()!.relativePath : undefined}>
                     <span data-slot="message-part-title-text">
                       <TextShimmer text={i18n.t("ui.tool.patch")} active={pending()} />
                     </span>
@@ -2430,7 +2443,12 @@ ToolRegistry.register({
                 }
               >
                 <div data-component="apply-patch-file-diff">
-                  <Dynamic component={fileComponent} mode="diff" fileDiff={single()!.view.fileDiff} />
+                  <Dynamic
+                    component={fileComponent}
+                    mode="diff"
+                    before={{ name: single()!.view.fileDiff.name, contents: single()!.view.deletions }}
+                    after={{ name: single()!.view.fileDiff.name, contents: single()!.view.additions }}
+                  />
                 </div>
               </ToolFileAccordion>
             </Show>

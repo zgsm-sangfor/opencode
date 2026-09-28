@@ -19,7 +19,6 @@ import type {
   Part,
   Session,
   SessionStatus,
-  FileDiff,
   Todo,
 } from "@opencode-ai/sdk/v2/client"
 import type { Path } from "@opencode-ai/sdk/v2/client"
@@ -334,11 +333,25 @@ export function DeviceSessionView(props: {
     if (n >= all.length) return all
     return all.slice(-n)
   })
-  const historyMore = createMemo(() => totalCount() > visibleCount())
+  const serverHistoryMore = createMemo(() => {
+    const cid = currentSessionID()
+    return !!cid && chat.historyMore(cid)
+  })
+  const historyMore = createMemo(() => totalCount() > visibleCount() || serverHistoryMore())
+  const historyLoading = createMemo(() => {
+    const cid = currentSessionID()
+    return !!cid && chat.historyLoading(cid)
+  })
   const turnStart = createMemo(() => Math.max(0, totalCount() - visibleCount()))
-  const onLoadEarlier = () => {
+  const onLoadEarlier = async () => {
     const cid = currentSessionID()
     if (!cid) return
+    if (totalCount() > visibleCount()) {
+      setVisibleCounts(cid, (visibleCounts[cid] ?? PAGE_SIZE) + PAGE_SIZE)
+      return
+    }
+    if (!chat.historyMore(cid)) return
+    await chat.historyLoadMore(cid)
     setVisibleCounts(cid, (visibleCounts[cid] ?? PAGE_SIZE) + PAGE_SIZE)
   }
 
@@ -393,7 +406,6 @@ export function DeviceSessionView(props: {
         "": effectiveStatus(),
         undefined: effectiveStatus(),
       } as Record<string, SessionStatus>,
-      session_diff: {} as Record<string, FileDiff[]>,
       todo: { [cid ?? ""]: chat.todos(cid ?? "") } as Record<string, Todo[]>,
       permission: chat.permissions(),
       question: chat.questions(),
@@ -476,7 +488,7 @@ export function DeviceSessionView(props: {
                                         }}
                                         turnStart={turnStart()}
                                         historyMore={historyMore()}
-                                        historyLoading={false}
+                                        historyLoading={historyLoading()}
                                         onLoadEarlier={onLoadEarlier}
                                         renderedMessages={paginatedMessages() as any[]}
                                         anchor={anchor}

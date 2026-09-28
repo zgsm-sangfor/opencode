@@ -102,7 +102,7 @@ export function MessageTimeline(props: {
   turnStart: number
   historyMore: boolean
   historyLoading: boolean
-  onLoadEarlier: () => void
+  onLoadEarlier: () => void | Promise<void>
   renderedMessages: MessageType[]
   anchor: (id: string) => string
   onRegisterMessage: (el: HTMLDivElement, id: string) => void
@@ -128,16 +128,23 @@ export function MessageTimeline(props: {
   const handleLoadEarlier = () => {
     const scroller = scrollEl
     if (!scroller) {
-      props.onLoadEarlier()
+      const result = props.onLoadEarlier()
+      if (result instanceof Promise) void result.catch(() => undefined)
       return
     }
     const prevTop = scroller.scrollTop
     const prevHeight = scroller.scrollHeight
-    props.onLoadEarlier()
-    requestAnimationFrame(() => {
-      const delta = scroller.scrollHeight - prevHeight
-      if (delta > 0) scroller.scrollTop = prevTop + delta
-    })
+    const restore = () =>
+      requestAnimationFrame(() => {
+        const delta = scroller.scrollHeight - prevHeight
+        if (delta > 0) scroller.scrollTop = prevTop + delta
+      })
+    const result = props.onLoadEarlier()
+    if (result instanceof Promise) {
+      void result.then(restore).catch(() => undefined)
+      return
+    }
+    restore()
   }
 
   const sid = createMemo(() => chat.activeSessionID())

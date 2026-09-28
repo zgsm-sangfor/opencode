@@ -10,7 +10,9 @@ function extractFromPatch(patch: string, kind: "deletions" | "additions"): strin
   let inHunk = false
   const result: string[] = []
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!
+    if (line === "" && i === lines.length - 1) continue
     if (line.startsWith("@@")) {
       inHunk = true
       continue
@@ -23,13 +25,13 @@ function extractFromPatch(patch: string, kind: "deletions" | "additions"): strin
       if (line.startsWith("-")) {
         result.push(line.slice(1))
       } else if (!line.startsWith("+")) {
-        result.push(line)
+        result.push(line.startsWith(" ") ? line.slice(1) : line)
       }
     } else {
       if (line.startsWith("+")) {
         result.push(line.slice(1))
       } else if (!line.startsWith("-")) {
-        result.push(line)
+        result.push(line.startsWith(" ") ? line.slice(1) : line)
       }
     }
   }
