@@ -11,7 +11,7 @@ import { Tooltip } from "./tooltip"
 import { ScrollView } from "./scroll-view"
 import { useFileComponent } from "../context/file"
 import { useI18n } from "../context/i18n"
-import { getDirectory, getFilename } from "@opencode-ai/util/path"
+import { getDirectory, getFilename, hasDirectory } from "@opencode-ai/util/path"
 import { checksum } from "@opencode-ai/util/encode"
 import { createEffect, createMemo, For, Match, Show, Switch, untrack, type JSX } from "solid-js"
 import { onCleanup } from "solid-js"
@@ -404,7 +404,7 @@ export const SessionReview = (props: SessionReviewProps) => {
                               <div data-slot="session-review-file-info">
                                 <FileIcon node={{ path: file, type: "file" }} />
                                 <div data-slot="session-review-file-name-container">
-                                  <Show when={file.includes("/")}>
+                                  <Show when={hasDirectory(file)}>
                                     <span data-slot="session-review-directory">{`\u202A${getDirectory(file)}\u202C`}</span>
                                   </Show>
                                   <span data-slot="session-review-filename">{getFilename(file)}</span>

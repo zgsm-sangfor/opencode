@@ -46,7 +46,7 @@ import { DiffChanges } from "./diff-changes"
 import { Markdown } from "./markdown"
 import { ImagePreview } from "./image-preview"
 import { AttachmentImage } from "./attachment-image"
-import { getDirectory as _getDirectory, getFilename } from "@opencode-ai/util/path"
+import { getDirectory as _getDirectory, getFilename, hasDirectory, relativize } from "@opencode-ai/util/path"
 import { checksum } from "@opencode-ai/util/encode"
 import { stripPromptSeed } from "@opencode-ai/util/prompt-seed"
 import { Tooltip } from "./tooltip"
@@ -248,22 +248,9 @@ function createPacedValue(getValue: () => string, live?: () => boolean) {
   return value
 }
 
-function relativizeProjectPath(path: string, directory?: string) {
-  if (!path) return ""
-  if (!directory) return path
-  if (directory === "/") return path
-  if (directory === "\\") return path
-  if (path === directory) return ""
-
-  const separator = directory.includes("\\") ? "\\" : "/"
-  const prefix = directory.endsWith(separator) ? directory : directory + separator
-  if (!path.startsWith(prefix)) return path
-  return path.slice(directory.length)
-}
-
 function getDirectory(path: string | undefined) {
   const data = useData()
-  return relativizeProjectPath(_getDirectory(path), data.directory)
+  return relativize(_getDirectory(path), data.directory)
 }
 
 function normalizeToolInput(input: Record<string, any>): Record<string, any> {
@@ -1278,6 +1265,7 @@ export const ToolRegistry = {
 }
 
 function ToolFileAccordion(props: { path: string; actions?: JSX.Element; children: JSX.Element }) {
+  const data = useData()
   const value = createMemo(() => props.path || "tool-file")
   const [expanded, setExpanded] = createSignal<string[]>([value()])
   const active = createMemo(() => expanded().includes(value()))
@@ -1306,10 +1294,10 @@ function ToolFileAccordion(props: { path: string; actions?: JSX.Element; childre
         <StickyAccordionHeader>
           <Accordion.Trigger>
             <div data-slot="apply-patch-trigger-content">
-              <div data-slot="apply-patch-file-info" title={props.path}>
+              <div data-slot="apply-patch-file-info" title={relativize(props.path, data.directory)}>
                 <FileIcon node={{ path: props.path, type: "file" }} />
                 <div data-slot="apply-patch-file-name-container">
-                  <Show when={props.path.includes("/")}>
+                  <Show when={hasDirectory(props.path)}>
                     <span data-slot="apply-patch-directory">{`\u202A${getDirectory(props.path)}\u202C`}</span>
                   </Show>
                   <span data-slot="apply-patch-filename">{getFilename(props.path)}</span>
@@ -1634,7 +1622,7 @@ ToolRegistry.register({
               <div data-component="tool-loaded-file">
                 <Icon name="enter" size="small" />
                 <span>
-                  {i18n.t("ui.tool.loaded")} {relativizeProjectPath(filepath, data.directory)}
+                  {i18n.t("ui.tool.loaded")} {relativize(filepath, data.directory)}
                 </span>
               </div>
             )}
@@ -2108,7 +2096,7 @@ ToolRegistry.register({
                     <span data-slot="message-part-title-filename">{filename()}</span>
                   </Show>
                 </div>
-                <Show when={props.input.filePath?.includes("/")}>
+                <Show when={hasDirectory(props.input.filePath)}>
                   <div data-slot="message-part-path">
                     <span data-slot="message-part-directory">{getDirectory(props.input.filePath!)}</span>
                   </div>
@@ -2194,7 +2182,7 @@ ToolRegistry.register({
                     <span data-slot="message-part-title-filename">{filename()}</span>
                   </Show>
                 </div>
-                <Show when={props.input.filePath?.includes("/")}>
+                <Show when={hasDirectory(props.input.filePath)}>
                   <div data-slot="message-part-path">
                     <span data-slot="message-part-directory">{getDirectory(props.input.filePath!)}</span>
                   </div>
@@ -2244,6 +2232,7 @@ ToolRegistry.register({
   name: "apply_patch",
   render(props) {
     const i18n = useI18n()
+    const data = useData()
     const fileComponent = useFileComponent()
     const files = createMemo(() =>
       patchFiles(
@@ -2326,10 +2315,13 @@ ToolRegistry.register({
                           <StickyAccordionHeader>
                             <Accordion.Trigger>
                               <div data-slot="apply-patch-trigger-content">
-                                <div data-slot="apply-patch-file-info" title={file.relativePath}>
+                                <div
+                                  data-slot="apply-patch-file-info"
+                                  title={relativize(file.relativePath, data.directory)}
+                                >
                                   <FileIcon node={{ path: file.relativePath, type: "file" }} />
                                   <div data-slot="apply-patch-file-name-container">
-                                    <Show when={file.relativePath.includes("/")}>
+                                    <Show when={hasDirectory(file.relativePath)}>
                                       <span data-slot="apply-patch-directory">{`\u202A${getDirectory(file.relativePath)}\u202C`}</span>
                                     </Show>
                                     <span data-slot="apply-patch-filename">{getFilename(file.relativePath)}</span>
@@ -2391,7 +2383,10 @@ ToolRegistry.register({
             trigger={
               <div data-component="edit-trigger">
                 <div data-slot="message-part-title-area">
-                  <div data-slot="message-part-title" title={!pending() ? single()!.relativePath : undefined}>
+                  <div
+                    data-slot="message-part-title"
+                    title={!pending() ? relativize(single()!.relativePath, data.directory) : undefined}
+                  >
                     <span data-slot="message-part-title-text">
                       <TextShimmer text={i18n.t("ui.tool.patch")} active={pending()} />
                     </span>
@@ -2399,7 +2394,7 @@ ToolRegistry.register({
                       <span data-slot="message-part-title-filename">{getFilename(single()!.relativePath)}</span>
                     </Show>
                   </div>
-                  <Show when={!pending() && single()!.relativePath.includes("/")}>
+                  <Show when={!pending() && hasDirectory(single()!.relativePath)}>
                     <div data-slot="message-part-path">
                       <span data-slot="message-part-directory">{getDirectory(single()!.relativePath)}</span>
                     </div>
