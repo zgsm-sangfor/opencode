@@ -211,33 +211,22 @@ export function DeviceLocalProvider(props: ParentProps<{ workspaceId?: string }>
     )
   })
 
-  const resolveModel = (providers: ProviderCapability[], key: ModelKey): ModelInfo | undefined => {
-    const provider = providers.find((p) => p.id === key.providerID)
-    const m = provider?.models[key.modelID]
-    if (m) return { ...m, provider: { id: provider.id, name: provider.name } }
-    return undefined
-  }
-
-  const fallbackModel = (providers: ProviderCapability[]): ModelInfo | undefined => {
-    for (const p of providers) {
-      if (p.default_model) {
-        const m = p.models[p.default_model]
-        if (m) return { ...m, provider: { id: p.id, name: p.name } }
-      }
-      const first = Object.values(p.models)[0]
-      if (first) return { ...first, provider: { id: p.id, name: p.name } }
-    }
-    return undefined
-  }
-
   const currentModel = createMemo<ModelInfo | undefined>(() => {
+    const models = modelList()
     const providers = sync.data.provider.connected as ProviderCapability[]
-    if (!providers?.length) return undefined
+    if (!models.length || !providers?.length) return undefined
     if (store.currentModel) {
-      const resolved = resolveModel(providers, store.currentModel)
-      if (resolved) return resolved
+      const key = store.currentModel
+      const found = models.find((m) => m.id === key.modelID && m.provider.id === key.providerID)
+      if (found) return found
     }
-    return fallbackModel(providers)
+    return providers
+      .map(
+        (p) =>
+          models.find((m) => m.provider.id === p.id && m.id === p.default_model) ??
+          models.find((m) => m.provider.id === p.id),
+      )
+      .find((m) => m)
   })
 
   const setModel = (model: ModelKey | undefined) => {
