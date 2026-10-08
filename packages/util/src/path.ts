@@ -12,6 +12,27 @@ export function getDirectory(path: string | undefined) {
   return parts.slice(0, parts.length - 1).join("/") + "/"
 }
 
+export function hasDirectory(path: string | undefined) {
+  return /[\/\\]/.test(path ?? "")
+}
+
+export function relativize(path: string | undefined, directory: string | undefined) {
+  if (!path) return ""
+  if (!directory) return path
+
+  const root = directory.replace(/\\/g, "/").replace(/\/+$/, "")
+  const full = path.replace(/\\/g, "/").replace(/\/+$/, "")
+  if (!root || root === "/") return path
+  if (full === root) return ""
+
+  const prefix = `${root}/`
+  if (!full.startsWith(prefix)) return path
+
+  const relative = full.slice(prefix.length)
+  if (!relative) return ""
+  return /[\\/]$/.test(path) ? `${relative}/` : relative
+}
+
 export function getFileExtension(path: string | undefined) {
   if (!path) return ""
   const parts = path.split(".")
